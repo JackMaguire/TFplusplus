@@ -278,3 +278,5 @@ run( Container const & data4tensor ){
 }
 
 } //namespace tfplusplus
+
+// https://godbolt.org/z/9YorMMK6x
