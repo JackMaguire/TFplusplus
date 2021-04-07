@@ -22,6 +22,69 @@ using TF_Tensor_ptr =
 
 namespace tfplusplus_devel {
 
+namespace type_deduction {
+
+template< typename T >
+struct TFDataTypeDetector {
+  //This is only called if there is no special instantiation below
+  TF_DataType value = TF_FLOAT;
+
+  static void validate(){
+    assert( false );
+  }
+};
+
+template<>
+struct TFDataTypeDetector< float > {
+  TF_DataType value = TF_FLOAT;
+
+  static void validate(){}
+};
+
+template<>
+struct TFDataTypeDetector< double > {
+  TF_DataType value = TF_DOUBLE;
+
+  static void validate(){}
+};
+
+template<>
+struct TFDataTypeDetector< bool > {
+  TF_DataType value = TF_BOOL;
+
+  static void validate(){}
+};
+
+template<>
+struct TFDataTypeDetector< int > {
+  TF_DataType value = TF_INT32;
+
+  static void validate(){ runtime_assert( sizeof(int) == 4 ); }
+};
+
+template<>
+struct TFDataTypeDetector< unsigned int > {
+  TF_DataType value = TF_UINT32;
+
+  static void validate(){ runtime_assert( sizeof(unsigned int) == 4 ); }
+};
+
+template<>
+struct TFDataTypeDetector< long int > {
+  TF_DataType value = TF_INT64;
+
+  static void validate(){ runtime_assert( sizeof(long int) == 8 ); }
+};
+
+template<>
+struct TFDataTypeDetector< unsigned long int > {
+  TF_DataType value = TF_UINT64;
+
+  static void validate(){ runtime_assert( sizeof(unsigned long int) == 8 ); }
+};
+
+}
+
 template <typename T>
 concept arithmetic = std::is_arithmetic< T >::value;
 
@@ -35,7 +98,7 @@ get_num_values( T const & t ){
     static_assert( std::ranges::range<T>, "Must pass a range of arithmetic" );
     assert( ! t.empty() );
     return t.size() * get_num_values< typename T::value_type >( * t.begin() );
-  } 
+  }
 }
 
 template< typename T >
@@ -70,8 +133,8 @@ get_dims(
 
     assert( ! t.empty() );
     dims[ current_dim ] = t.size();
-  
-    get_dims< NDIM, typename T::value_type >( t[0], dims, current_dim + 1 );
+
+    get_dims< NDIM, typename T::value_type >( *t.begin(), dims, current_dim + 1 );
   }
 }
 
@@ -132,7 +195,7 @@ has_expected_value_type(){
   }
 }
 
-template< typename T, typename ValType = float >
+template< typename T, typename ValType >
 void
 get_values(
   T const & t,
@@ -153,7 +216,7 @@ get_values(
       //Can do copying here
       //std::cout << "CAN COPY" << std::endl;
       ValType const * data = get_first_value_ptr( t );
-      int64_t const nval_to_copy = get_num_values( t ); 
+      int64_t const nval_to_copy = get_num_values( t );
       values.insert( values.end(), data, data + nval_to_copy );
       return;
     } else {
@@ -184,26 +247,33 @@ FloatTensor(
   return t;
 }*/
 
-template< typename Container >
+template< typename Container, typename ValType >
 TF_Tensor_ptr
 run( Container const & data4tensor ){
   static_assert( std::ranges::range< Container >, "Must pass a range of arithmetic" );
 
   using namespace tfplusplus_devel;
+  using namespace tfplusplus_devel::type_deduction;
 
   constexpr int NDIM = get_num_dims< Container >();
   std::array< int, NDIM > const dims = get_dims( data4tensor );
 
   int64_t const nvalues = get_num_values( data4tensor );
-  std::vector< float > values;
+  std::vector< ValType > values;
+  values.reserve( nvalues );
   get_values( data4tensor, values );
   assert( values.size() == nvalues );
 
   //Make Tensor
-  TF_Tensor * tensor = TF_AllocateTensor( TF_FLOAT, dims.data(), NDIM, sizeof(float) * nvalues );
+  TFDataTypeDetector< ValType >::validate();
+  TF_Tensor * tensor = TF_AllocateTensor(
+    TFDataTypeDetector< ValType >::value,
+    dims.data(), NDIM, sizeof( ValType ) * nvalues
+  );
 
-  memcpy( TF_TensorData( tensor ), values.data(), sizeof(float) * nvalues );
-  
+  assert( TF_TensorByteSize( tensor ) == sizeof( ValType ) * nvalues );
+  memcpy( TF_TensorData( tensor ), values.data(), sizeof( ValType ) * nvalues );
+
   return TF_Tensor_ptr( tensor );
 }
 
