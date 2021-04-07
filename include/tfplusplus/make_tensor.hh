@@ -10,6 +10,8 @@
 
 #include <tensorflow/c/c_api.h>
 
+namespace tfplusplus {
+
 template <typename T>
 concept arithmetic = std::is_arithmetic< T >::value;
 
@@ -96,6 +98,18 @@ get_dims(
 }
 
 template< typename T >
+float const *
+get_first_float_ptr( T const & t ){
+  static_assert( std::ranges::range<T>, "Must pass a range of arithmetic" );
+  if constexpr( std::ranges::range< typename T::value_type > ) {
+    assert( ! t.empty() );
+    return get_first_float_ptr< typename T::value_type >( * t.begin() );
+  } else {
+    return &(*t.begin());
+  }
+}
+
+template< typename T >
 void
 get_values(
   T const & t,
@@ -104,6 +118,7 @@ get_values(
   static_assert( assert_float_value_type< T >(), "assumes float" );
 
   if constexpr ( arithmetic< typename T::value_type > ) {
+    static_assert( false, "Dead Code?" );
     //We are at the bottom layer
     return;
   }
@@ -119,6 +134,9 @@ get_values(
     if constexpr( std::is_trivially_copyable< typename T::value_type >::value ){
       //Can do copying here
       std::cout << "CAN COPY" << std::endl;
+      float const * data = get_first_float_ptr( t );
+      int64_t const nval_to_copy = get_num_values( t ); 
+      values.insert( values.end(), data, data + nval_to_copy );
       return;
     } else {
       std::cout << "NO COPY" << std::endl;
@@ -167,6 +185,11 @@ run( Container const & values ){
   int64_t const nvalues = get_num_values( values );
 }
 
+} //namespace tfplusplus
+
+#define runmain
+#ifdef runmain
+
 int main(){
   /*int i = 0;
   run( i );
@@ -196,3 +219,5 @@ int main(){
   run( lai );
   //std::cout << '('; print_shape( lai ); std::cout << std::endl;*/
 }
+
+#endif
