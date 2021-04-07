@@ -33,11 +33,6 @@ get_num_values( T const & t ){
   }
   else {
     static_assert( std::ranges::range<T>, "Must pass a range of arithmetic" );
-
-    //using category = typename std::iterator_traits< typename T::iterator >::iterator_category;
-    //static_assert( std::is_same_v<category, std::random_access_iterator_tag>,
-    //  "We only support random access iterators right now" );
-
     assert( ! t.empty() );
     return t.size() * get_num_values< typename T::value_type >( * t.begin() );
   } 
@@ -113,7 +108,7 @@ get_first_value_ptr( T const & t ){
 }
 
 
-template< typename T >
+/*template< typename T >
 constexpr
 bool
 has_float_value_type(){
@@ -123,7 +118,7 @@ has_float_value_type(){
     static_assert( std::ranges::range< T > );
     return has_float_value_type< typename T::value_type >();
   }
-}
+}*/
 
 template< typename T, typename EXPECTED >
 constexpr
@@ -133,18 +128,16 @@ has_expected_value_type(){
     return std::is_same_v< T, EXPECTED >;
   } else {
     static_assert( std::ranges::range< T > );
-    return has_float_value_type< typename T::value_type >();
+    return has_expected_value_type< typename T::value_type, EXPECTED >();
   }
 }
 
-template< typename T >
+template< typename T, typename ValType = float >
 void
 get_values(
   T const & t,
-  std::vector< float > & values
+  std::vector< ValType > & values
 ){
-  static_assert( has_float_value_type< T >(), "assumes float" );
-
   if constexpr ( arithmetic< typename T::value_type > ) {
     static_assert( false, "Dead Code?" );
     //We are at the bottom layer
@@ -152,17 +145,14 @@ get_values(
   }
   else {
     static_assert( std::ranges::range<T>, "Must pass a range of arithmetic" );
-
-    using category = typename std::iterator_traits< typename T::iterator >::iterator_category;
-    static_assert( std::is_same_v<category, std::random_access_iterator_tag>,
-      "We only support random access iterators right now" );
+    static_assert( has_expected_value_type< T, ValType >() );
 
     assert( ! t.empty() );
 
     if constexpr( std::is_trivially_copyable< typename T::value_type >::value ){
       //Can do copying here
       //std::cout << "CAN COPY" << std::endl;
-      float const * data = get_first_value_ptr( t );
+      ValType const * data = get_first_value_ptr( t );
       int64_t const nval_to_copy = get_num_values( t ); 
       values.insert( values.end(), data, data + nval_to_copy );
       return;
